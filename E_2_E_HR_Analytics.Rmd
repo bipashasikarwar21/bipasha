@@ -1,0 +1,542 @@
+---
+title: "HR Analytics Hackathon"
+output: html_notebook
+---
+
+
+
+```{r}
+require(readr)
+train <- read_csv("C:/Users/ASUS/Downloads/train_.csv")
+test <-  read_csv("C:/Users/ASUS/Downloads/test_.csv")
+
+# Get a feel of the data at hand
+head(train)
+head(test)
+
+```
+
+
+
+```{r}
+
+# Combine datasets for cleaning
+require(dplyr)
+master <- bind_rows(train, test)
+
+str(master)
+
+```
+
+
+
+```{r}
+#### ---- Data cleaning ---- ####
+
+# Avoid case mismatch possibility
+master <- mutate_if(master, is.character, tolower)
+
+```
+
+
+
+```{r}
+master <- distinct(master)
+```
+
+
+```{r}
+# Check missing values
+colSums(is.na(master))
+
+```
+
+
+
+```{r}
+3443 / nrow(master) * 100
+
+5936 / nrow(master) * 100
+
+```
+
+
+
+```{r}
+
+summary(master$previous_year_rating)
+
+```
+
+
+```{r}
+master$previous_year_rating[which(is.na(master$previous_year_rating))] <- 3
+
+
+```
+
+
+
+```{r}
+summary(as.factor(master$education))
+```
+
+
+
+
+
+
+```{r}
+# Lets keep it simple for now.
+master$education[which(is.na(master$education))] <- "unknown"
+
+table(master$education)
+
+```
+
+
+
+```{r}
+# Univariate / Bivariate Analysis ----
+
+# 1 employee_id
+n_distinct(master$employee_id) == nrow(master)
+
+```
+
+
+
+```{r}
+# 2 department
+
+dept_df <- group_by(train, department) %>% 
+  summarise(dept_influence = round(sum(is_promoted, na.rm = T)/n()*100, 2)) %>%
+  arrange(dept_influence)
+
+dept_df
+
+# IS there departmental bias ???
+
+```
+
+Is there departmental bias ???
+
+
+
+
+
+```{r}
+
+# 3 region
+
+ggplot(master, aes(x = region)) + 
+  geom_bar(fill = 'skyblue',color = 'black') + coord_flip()
+
+reg_df <- group_by(master, region) %>% 
+          summarise(reg_strength = n()) %>%
+          arrange(reg_strength)
+
+# Way too many categories in region. Pattern detection not possible.
+
+```
+
+
+
+```{r}
+master$region <- NULL
+
+```
+
+
+
+```{r}
+
+# 5 gender
+ggplot(master[!is.na(master$is_promoted),],aes(x = gender, fill =  gender)) + geom_bar() + coord_polar()
+
+
+ggplot(master[!is.na(master$is_promoted),], 
+       aes(x = gender, fill =  as.factor(is_promoted))) + 
+  geom_bar(position = 'fill')
+# Lesser female employees overall. But no apparent gender bias in promotions.
+
+
+```
+
+
+
+```{r}
+# 6 recruitment_channel
+
+channel_df <- group_by(train, recruitment_channel) %>% 
+  summarise(channel_influence = round(sum(is_promoted, na.rm = T)/n()*100,2)) %>%
+  arrange(channel_influence)
+
+channel_df
+# Clearly, referred employees outdo others.
+
+
+```
+
+
+
+```{r}
+
+# 7 no_of_trainings
+
+# Check outliers
+plot(quantile(master$no_of_trainings, seq(0,1,0.01)))
+quantile(master$no_of_trainings, seq(0,1,0.01))
+
+master$no_of_trainings[master$no_of_trainings > 4] <- 4
+
+
+```
+
+
+
+```{r}
+ggplot(master[!is.na(master$is_promoted),], aes(x = no_of_trainings, fill = as.factor(is_promoted))) +
+  geom_bar(position = 'fill')
+
+# More the no of trainings required, lesser the chance of promotion.
+
+```
+
+
+
+
+```{r}
+
+# 8 Age
+
+# Check outliers
+plot(quantile(master$age, seq(0,1,0.01)))
+# No outliers
+
+ggplot(train, aes(x = age, fill = as.factor(is_promoted))) + 
+  geom_histogram(binwidth = 10, color = 'black', position = 'fill')
+
+```
+
+
+
+```{r}
+
+# 10 length_of_service
+
+# Check outliers
+plot(quantile(master$length_of_service, seq(0,1,0.01)))
+quantile(master$length_of_service, seq(0,1,0.01))
+
+master$length_of_service[master$length_of_service > 20] <- 20
+
+
+```
+
+
+
+```{r}
+ggplot(master[!is.na(master$is_promoted),], 
+       aes(x = length_of_service, 
+           fill = as.factor(is_promoted))) + 
+  geom_histogram(binwidth = 5, position = 'fill',color = 'black')
+
+
+```
+
+
+
+```{r}
+
+
+# 11 KPIs_met>80%
+
+ggplot(master[!is.na(master$is_promoted),], 
+       aes(x = `KPIs_met >80%`, fill = as.factor(is_promoted))) + 
+  geom_bar(position = 'fill',color = 'black')
+
+# Clearly, meeting KPI matters for promotion
+
+
+```
+
+
+
+```{r}
+
+# 12 awards_won?
+
+ggplot(master[!is.na(master$is_promoted),], 
+       aes(x = `awards_won?`, fill = as.factor(is_promoted))) + 
+  geom_bar(position = 'fill',color = 'black')
+
+# It highly impacts chances of promotion.
+
+
+
+```
+
+
+
+```{r}
+# 13 avg_training_score
+plot(quantile(master$avg_training_score, seq(0,1,0.01)))
+quantile(master$avg_training_score, seq(0,1,0.01))
+
+master$avg_training_score[master$avg_training_score > 91] <- 91
+master$avg_training_score[master$avg_training_score < 44] <- 44
+
+```
+
+
+```{r}
+
+
+ggplot(master[!is.na(master$is_promoted),], 
+       aes(x = avg_training_score, 
+           fill = as.factor(is_promoted))) + 
+  geom_histogram(binwidth = 10, position = 'fill',color = 'black')
+
+
+
+```
+
+
+
+
+Feature Engineering ----
+
+```{r}
+# Creating some new metrics which may help in prediction.
+
+# total training score of employees
+master$tot_training_score <- master$no_of_trainings * master$avg_training_score
+
+# Age of employee when joined company
+master$start_time_age <- master$age - master$length_of_service
+
+```
+
+
+
+
+
+
+```{r}
+
+# Lets normalize continuous variables.
+master[ , c(6:9,12,14,15)] <- sapply(master[ , c(6:9,12,14,15)], scale)
+
+summary(master) 
+
+# EDA Complete...
+
+```
+
+
+
+Create dummy variables. Necessary for some algorithms
+
+```{r}
+
+require(dummies)
+
+master_dummy <- dummy.data.frame(as.data.frame(master))
+
+```
+
+
+
+Model Building ----
+
+
+```{r}
+
+train <- master_dummy[(!is.na(master_dummy$is_promoted)),]
+
+test <- master_dummy[(is.na(master_dummy$is_promoted)),]
+
+require(caTools)
+set.seed(999)
+index <- sample.split(train$is_promoted, SplitRatio = 0.75)
+
+trn.data <- train[index, ]
+val.data <- train[!index, ]
+
+```
+
+
+```{r}
+
+rm(channel_df, dept_df, df, edu_gp, master, reg_df, train, i)
+
+
+```
+
+
+
+
+```{r}
+
+# Balancing the classes by SMOTE
+
+require(smotefamily)
+
+set.seed(100)
+trn.smote <- SMOTE(trn.data[,-c(1,27)], trn.data$is_promoted)
+
+# Classes are well balanced as compared to orig. data.
+
+```
+
+
+
+```{r}
+round(prop.table(table(master$is_promoted)) * 100, 2)
+# Target class has huge imbalance.
+
+
+```
+
+
+```{r}
+
+
+
+```
+
+
+```{r}
+trn.data <- trn.smote$data
+
+names(trn.data)[28] <- 'is_promoted'
+
+prop.table(table(trn.data$is_promoted))
+
+trn.data$is_promoted <- as.integer(trn.data$is_promoted)
+```
+
+
+
+1. Logistic Regression ----
+
+```{r}
+lr_model <- glm(is_promoted ~ ., data = trn.data, family = 'binomial')
+
+summary(lr_model)
+
+
+```
+
+
+
+```{r}
+
+prob_prom <- predict(lr_model, newdata = val.data, type = 'response')
+
+summary(prob_prom)
+
+pred_prom <- as.factor(ifelse(prob_prom > 0.5, 1, 0))
+
+act_prom <- as.factor(val.data$is_promoted)
+
+require(caret)
+confusionMatrix(pred_prom, act_prom, positive = '1')
+
+```
+
+
+
+
+```{r}
+
+precision <- posPredValue(pred_prom, act_prom, positive="1")
+
+recall <- sensitivity(pred_prom, act_prom, positive="1")
+
+F1 <- (2 * precision * recall) / (precision + recall)
+
+F1
+
+```
+
+
+
+```{r}
+
+prob_prom <- predict(lr_model, newdata = test, type = 'response')
+
+test$is_promoted <- ifelse(prob_prom > 0.5, 1, 0)
+
+```
+
+
+
+```{r}
+
+write.csv(test[ , c('employee_id', 'is_promoted')] , "sub_lrm_2.csv", row.names = F)
+
+```
+
+
+
+
+
+```{r}
+require(rpart)
+dt_model <- rpart(is_promoted ~ ., data = trn.data)
+
+require(rpart.plot)
+prp(dt_model)
+
+```
+
+
+
+
+
+
+```{r}
+prob_prom <- predict(dt_model, newdata = val.data)
+
+
+```
+
+```{r}
+
+pred_prom <- as.factor(ifelse(prob_prom > 0.5, 1, 0))
+
+act_prom <- as.factor(val.data$is_promoted)
+
+confusionMatrix(pred_prom, act_prom, positive = '1')
+```
+
+
+
+
+```{r}
+
+precision <- posPredValue(pred_prom, act_prom, positive="1")
+
+recall <- sensitivity(pred_prom, act_prom, positive="1")
+
+F1 <- (2 * precision * recall) / (precision + recall)
+
+F1
+
+```
+
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
